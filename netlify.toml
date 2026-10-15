@@ -4,6 +4,8 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # قيم تشغيل عامة وليست بيانات سرية؛ تبقى بقية المتغيرات خاضعة للفحص.
+  SECRETS_SCAN_OMIT_KEYS = "NODE_ENV,PORT"
 
 [functions]
   node_bundler = "esbuild"
