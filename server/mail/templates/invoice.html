@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8">
+    <title>فاتورة {{invoiceNumber}}</title>
+    <style>
+      body { font: 14px Tahoma,Arial,sans-serif; color: #252037; line-height: 1.8; padding: 24px; max-width: 850px; margin: auto; }
+      table { width: 100%; border-collapse: collapse; margin: 24px 0; }
+      th, td { text-align: right; border-bottom: 1px solid #ddd; padding: 12px; }
+      th { background: #f1edff; }
+      .totals { margin-right: auto; max-width: 340px; }
+      .total { font-weight: bold; font-size: 18px; }
+      @media print { body { padding: 0; } }
+    </style>
+  </head>
+  <body>
+    <h1>STOR</h1>
+    <h2>فاتورة {{invoiceNumber}}</h2>
+    <p>الطلب {{orderNumber}} · {{date}}</p>
+    <p>{{name}}<br>{{email}}<br>{{address}}</p>
+    <table>
+      <thead><tr><th>المنتج</th><th>المقاس واللون</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
+      <tbody>{{items}}</tbody>
+    </table>
+    <table class="totals">
+      <tr><td>المجموع</td><td>{{subtotal}} ر.س</td></tr>
+      <tr><td>الشحن</td><td>{{shipping}} ر.س</td></tr>
+      <tr class="total"><td>الإجمالي</td><td>{{total}} ر.س</td></tr>
+    </table>
+    <p>طريقة الدفع: دفع عند الاستلام. هذه فاتورة مبيعات وليست إقرارًا بتحصيل المبلغ.</p>
+    <p>يمكن فتح هذا المرفق في المتصفح وطباعته أو حفظه PDF.</p>
+  </body>
+</html>

@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111629" />
+    <title>إدارة STOR</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="admin.css" />
+    <script src="admin.js" type="module"></script>
+  </head>
+  <body class="admin-page">
+    <!-- بوابة دخول الأدمن مستقلة عن حساب العميل وصلاحياته. -->
+    <header class="site-header">
+      <div class="container header-layout">
+        <a class="brand" href="admin.html">ST<span>O</span>R</a>
+        <span class="muted">إدارة المتجر</span>
+        <a class="text-link admin-store-link" href="/" target="_blank" rel="noopener"
+          >فتح متجر العميل ←</a
+        >
+      </div>
+    </header>
+    <main class="container admin-main">
+      <p class="admin-notice" id="admin-message" role="status" hidden></p>
+      <p class="field-error" id="admin-error" role="alert"></p>
+
+      <section class="panel admin-login" id="admin-login">
+        <span class="eyebrow muted">STOR / ADMIN</span>
+        <h1>دخول الأدمن</h1>
+        <p class="muted">استخدم اسم المستخدم وكلمة المرور اللذين أنشأتهما من الخادم.</p>
+        <form id="admin-login-form">
+          <div class="field">
+            <label for="admin-identifier">اسم المستخدم أو البريد الإلكتروني</label>
+            <input
+              id="admin-identifier"
+              name="identifier"
+              autocomplete="username"
+              required
+              maxlength="254"
+            />
+          </div>
+          <div class="field">
+            <label for="admin-password">كلمة المرور</label>
+            <input
+              id="admin-password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+              maxlength="128"
+            />
+          </div>
+          <button class="button button-primary full-width" type="submit">تسجيل دخول الأدمن</button>
+        </form>
+        <a class="text-link" href="/#forgot-password/admin">نسيت كلمة مرور الأدمن؟</a>
+      </section>
+
+      <!-- التنقل والبيانات لا يظهران قبل جلسة أدمن صالحة من الخادم. -->
+      <section id="admin-shell" hidden>
+        <div class="section-heading">
+          <div>
+            <span class="muted">مرحبًا</span>
+            <h1 id="admin-name"></h1>
+          </div>
+          <button class="button button-secondary" id="admin-logout" type="button">
+            تسجيل الخروج
+          </button>
+        </div>
+        <nav class="admin-nav" aria-label="أقسام الإدارة">
+          <button type="button" data-view="dashboard">نظرة عامة</button>
+          <button type="button" data-view="products">المنتجات والمخزون</button>
+          <button type="button" data-view="orders">الطلبات والفواتير</button>
+          <button type="button" data-view="customers">العملاء</button>
+          <button type="button" data-view="mail">سجل البريد</button>
+          <button type="button" data-view="audit">سجل التعديلات</button>
+        </nav>
+        <div id="admin-content" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <!-- 1. مؤشرات محسوبة من MySQL، وليست أرقامًا تجريبية ثابتة. -->
+    <template id="admin-dashboard-template">
+      <div class="admin-metrics">
+        <article class="panel">
+          <p class="muted">المنتجات النشطة</p>
+          <strong data-metric="products"></strong>
+        </article>
+        <article class="panel">
+          <p class="muted">العملاء</p>
+          <strong data-metric="customers"></strong>
+        </article>
+        <article class="panel">
+          <p class="muted">الطلبات</p>
+          <strong data-metric="orders"></strong>
+        </article>
+        <article class="panel">
+          <p class="muted">قيد التجهيز</p>
+          <strong data-metric="pending"></strong>
+        </article>
+      </div>
+      <section class="panel admin-info">
+        <h2>المتجر والبيانات متصلان</h2>
+        <p>
+          تُحفظ تعديلات المنتجات في MySQL، ويقرأ متجر العميل التعديلات تلقائيًا خلال 10 ثوانٍ أو عند
+          تحديث الصفحة.
+        </p>
+        <p>قيمة الطلبات المسلّمة: <strong id="admin-revenue"></strong></p>
+        <p class="note">هذه قيمة الطلبات وليست صافي الربح؛ لا توجد بيانات تكاليف المنتجات.</p>
+        <p class="admin-notice" id="smtp-summary"></p>
+      </section>
+    </template>
+
+    <!-- 2. إدارة المنتج؛ التعطيل يحفظ ارتباطه بالطلبات والفواتير السابقة. -->
+    <template id="admin-products-template">
+      <div class="section-heading">
+        <h2>المنتجات والمخزون</h2>
+        <button class="button button-primary" id="new-product" type="button">إضافة منتج</button>
+      </div>
+      <div class="table-scroll panel">
+        <table>
+          <thead>
+            <tr>
+              <th>المنتج</th>
+              <th>SKU</th>
+              <th>السعر</th>
+              <th>المخزون</th>
+              <th>الظهور</th>
+              <th>الإجراء</th>
+            </tr>
+          </thead>
+          <tbody id="admin-products-body"></tbody>
+        </table>
+      </div>
+      <form class="panel admin-editor" id="product-editor" hidden>
+        <div class="flex-between">
+          <h2 id="product-editor-title">تعديل المنتج</h2>
+          <button class="button button-secondary" id="cancel-product" type="button">إغلاق</button>
+        </div>
+        <div class="form-grid">
+          <div class="field">
+            <label for="edit-name">اسم المنتج</label
+            ><input id="edit-name" name="name" required minlength="3" maxlength="160" />
+          </div>
+          <div class="field">
+            <label for="edit-sku">رمز المنتج SKU</label
+            ><input id="edit-sku" name="sku" required minlength="2" maxlength="50" dir="ltr" />
+          </div>
+          <div class="field">
+            <label for="edit-price">السعر بالريال</label
+            ><input
+              id="edit-price"
+              name="price"
+              type="number"
+              required
+              min="0.01"
+              max="99999999.99"
+              step="0.01"
+            />
+          </div>
+          <div class="field">
+            <label for="edit-category">الفئة</label
+            ><select id="edit-category" name="category">
+              <option value="tee">تيشيرتات</option>
+              <option value="hoodie">سويتشرتات</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="edit-tag">الشارة</label><input id="edit-tag" name="tag" maxlength="60" />
+          </div>
+          <div class="field">
+            <label for="edit-fit">القصة</label><input id="edit-fit" name="fit" maxlength="100" />
+          </div>
+          <div class="field">
+            <label for="edit-color">اللون الافتراضي</label
+            ><input id="edit-color" name="color" type="color" value="#181b22" />
+          </div>
+          <label class="admin-checkbox"
+            ><input id="edit-active" name="active" type="checkbox" checked /> إظهار المنتج
+            للعميل</label
+          >
+          <div class="field full-span">
+            <label for="edit-description">الوصف</label
+            ><textarea
+              id="edit-description"
+              name="description"
+              rows="3"
+              maxlength="4000"
+            ></textarea>
+          </div>
+          <div class="field full-span">
+            <label for="edit-images">صور المنتج — مسار أو رابط HTTPS في كل سطر</label
+            ><textarea
+              id="edit-images"
+              name="images"
+              dir="ltr"
+              rows="3"
+              required
+              placeholder="assets/image5.png"
+            ></textarea
+            ><small>الصورة الأولى هي الرئيسية. ضع الملفات المحلية داخل dist/assets.</small>
+          </div>
+        </div>
+        <h3>المخزون حسب المقاس</h3>
+        <div class="stock-grid" id="stock-fields"></div>
+        <p class="note">
+          إذا تغير المخزون أو المنتج بعد فتح النموذج، سيرفض الخادم الحفظ حتى تُحدّث البيانات لتجنب
+          استبدال تعديل أحدث.
+        </p>
+        <button class="button button-primary" type="submit">حفظ المنتج والمخزون</button>
+      </form>
+    </template>
+    <template id="admin-product-row-template">
+      <tr>
+        <td data-cell="name"></td>
+        <td data-cell="sku"></td>
+        <td data-cell="price"></td>
+        <td data-cell="stock"></td>
+        <td data-cell="active"></td>
+        <td>
+          <button class="button button-secondary" data-action="edit-product" type="button">
+            تعديل
+          </button>
+        </td>
+      </tr>
+    </template>
+    <template id="admin-stock-template"
+      ><div class="field"><label></label><input type="number" min="0" max="1000000" required /></div
+    ></template>
+
+    <!-- 3. تغيير الحالة وإرسال فاتورة إلى بريد صاحب الطلب المسجل فقط. -->
+    <template id="admin-orders-template">
+      <div class="section-heading">
+        <h2>الطلبات والفواتير</h2>
+        <button class="button button-secondary" data-refresh type="button">تحديث</button>
+      </div>
+      <div class="table-scroll panel">
+        <table>
+          <thead>
+            <tr>
+              <th>الطلب</th>
+              <th>العميل</th>
+              <th>الإجمالي</th>
+              <th>الحالة</th>
+              <th>الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="admin-orders-body"></tbody>
+        </table>
+      </div>
+      <form class="panel admin-editor" id="order-editor" hidden>
+        <h2 id="order-editor-title"></h2>
+        <p class="muted" id="order-editor-customer"></p>
+        <div class="form-grid">
+          <div class="field">
+            <label for="order-status">الحالة الجديدة</label
+            ><select id="order-status" name="status"></select>
+          </div>
+          <div class="field">
+            <label for="order-note">ملاحظة للعميل (اختياري)</label
+            ><input id="order-note" name="note" maxlength="500" />
+          </div>
+        </div>
+        <label class="admin-checkbox"
+          ><input name="notify" type="checkbox" checked /> إرسال تحديث الحالة إلى بريد العميل</label
+        >
+        <p class="note">الإلغاء متاح قبل الشحن ويعيد الكمية إلى المخزون مرة واحدة.</p>
+        <button class="button button-primary" type="submit">حفظ الحالة</button>
+      </form>
+    </template>
+    <template id="admin-order-row-template">
+      <tr>
+        <td data-cell="number"></td>
+        <td data-cell="customer"></td>
+        <td data-cell="total"></td>
+        <td data-cell="status"></td>
+        <td>
+          <div class="table-actions">
+            <button class="button button-secondary" data-action="edit-order" type="button">
+              إدارة الطلب</button
+            ><button class="button button-primary" data-action="send-invoice" type="button">
+              إرسال الفاتورة</button
+            ><a class="text-link" data-action="invoice-link" target="_blank" rel="noopener"
+              >معاينة الفاتورة</a
+            >
+          </div>
+        </td>
+      </tr>
+    </template>
+
+    <!-- 4. العملاء والبريد والتدقيق: لا تظهر تجزئات كلمات المرور أو الرموز. -->
+    <template id="admin-customers-template">
+      <h2>العملاء المسجلون</h2>
+      <div class="table-scroll panel">
+        <table>
+          <thead>
+            <tr>
+              <th>المعرف</th>
+              <th>الاسم</th>
+              <th>البريد</th>
+              <th>الجوال</th>
+              <th>التسجيل</th>
+            </tr>
+          </thead>
+          <tbody id="admin-customers-body"></tbody>
+        </table>
+      </div>
+    </template>
+    <template id="admin-customer-row-template"
+      ><tr>
+        <td data-cell="id"></td>
+        <td data-cell="name"></td>
+        <td data-cell="email"></td>
+        <td data-cell="phone"></td>
+        <td data-cell="created"></td></tr
+    ></template>
+
+    <template id="admin-mail-template">
+      <div class="section-heading">
+        <h2>سجل البريد</h2>
+        <button class="button button-secondary" data-refresh type="button">تحديث</button>
+      </div>
+      <div class="table-scroll panel">
+        <table>
+          <thead>
+            <tr>
+              <th>المعرف</th>
+              <th>المستلم</th>
+              <th>الموضوع</th>
+              <th>الحالة</th>
+              <th>المحاولات</th>
+              <th>آخر خطأ</th>
+              <th>الإجراء</th>
+            </tr>
+          </thead>
+          <tbody id="admin-mail-body"></tbody>
+        </table>
+      </div>
+    </template>
+    <template id="admin-mail-row-template"
+      ><tr>
+        <td data-cell="id"></td>
+        <td data-cell="recipient"></td>
+        <td data-cell="subject"></td>
+        <td data-cell="status"></td>
+        <td data-cell="attempts"></td>
+        <td data-cell="error"></td>
+        <td>
+          <button class="button button-secondary" data-action="retry-mail" type="button">
+            إعادة المحاولة
+          </button>
+        </td>
+      </tr></template
+    >
+
+    <template id="admin-audit-template">
+      <h2>سجل تعديلات الأدمن</h2>
+      <div class="table-scroll panel">
+        <table>
+          <thead>
+            <tr>
+              <th>التاريخ</th>
+              <th>الأدمن</th>
+              <th>الإجراء</th>
+              <th>الكيان</th>
+              <th>التفاصيل</th>
+            </tr>
+          </thead>
+          <tbody id="admin-audit-body"></tbody>
+        </table>
+      </div>
+    </template>
+    <template id="admin-audit-row-template"
+      ><tr>
+        <td data-cell="date"></td>
+        <td data-cell="admin"></td>
+        <td data-cell="action"></td>
+        <td data-cell="entity"></td>
+        <td>
+          <details>
+            <summary>قبل وبعد</summary>
+            <pre data-cell="details"></pre>
+          </details>
+        </td></tr
+    ></template>
+  </body>
+</html>
