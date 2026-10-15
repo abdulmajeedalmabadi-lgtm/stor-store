@@ -1,0 +1,28 @@
+[build]
+  publish = "dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[functions]
+  node_bundler = "esbuild"
+  # إبقاء ملفات الخادم في مساراتها يحافظ على روابط قوالب البريد import.meta.url.
+  external_node_modules = ["serverless-http", "express", "helmet", "mysql2", "nodemailer", "dotenv", "zod"]
+  included_files = ["server/**"]
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+[functions."mail-cron"]
+  schedule = "* * * * *"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "no-referrer"
